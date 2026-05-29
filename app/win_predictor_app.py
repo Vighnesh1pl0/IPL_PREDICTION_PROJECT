@@ -108,7 +108,7 @@ Advanced ML-based second innings analysis
 
 @st.cache_data
 def load_model():
-    model = joblib.load("../models/best_winprob_model.pkl")
+    model = joblib.load("models/best_winprob_model.pkl")
     columns = joblib.load("../models/x_columns.pkl")
     return model, columns
 
