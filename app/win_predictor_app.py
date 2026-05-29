@@ -3,14 +3,24 @@ import pandas as pd
 import joblib
 import plotly.express as px
 import plotly.graph_objects as go
+from pathlib import Path
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="IPL Win Probability",
     page_icon="🏏",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-#no need to uncomment this
+
+# ---------------- MODEL PATH FIX ----------------
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR.parent / "models"
+
+MODEL_PATH = MODEL_DIR / "best_winprob_model.pkl"
+COLUMNS_PATH = MODEL_DIR / "x_columns.pkl"
+
+# ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
 
@@ -20,7 +30,7 @@ body {
     color: #e5e7eb;
 }
 
-/* SIDEBAR – ADVANCED COLOR */
+/* SIDEBAR */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #1e1b4b, #312e81);
     color: #e5e7eb;
@@ -40,7 +50,7 @@ h1, h2, h3 {
     font-weight: 700;
 }
 
-/* CARDS */
+/* CARD */
 .card {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 20px;
@@ -79,10 +89,6 @@ h1, h2, h3 {
     box-shadow: 0 0 24px rgba(99,102,241,0.55);
 }
 
-.stButton>button:hover {
-    transform: scale(1.04);
-}
-
 /* FOOTER */
 .footer {
     color: #94a3b8;
@@ -93,6 +99,7 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------- TITLE ----------------
 st.markdown("""
 <h1 style="text-align:center;
 background: linear-gradient(90deg,#60a5fa,#a78bfa);
@@ -101,29 +108,42 @@ color: transparent;
 font-size: 52px;">
 IPL Win Probability Dashboard
 </h1>
+
 <p style="text-align:center;color:#c7d2fe;">
 Advanced ML-based second innings analysis
 </p>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+# ---------------- LOAD MODEL ----------------
+@st.cache_resource
 def load_model():
-    model = joblib.load("models/best_winprob_model.pkl")
-    columns = joblib.load("../models/x_columns.pkl")
+    model = joblib.load(MODEL_PATH)
+    columns = joblib.load(COLUMNS_PATH)
     return model, columns
 
-model, x_columns = load_model()
+try:
+    model, x_columns = load_model()
 
+except Exception as e:
+    st.error(f"Error loading model files: {e}")
+    st.stop()
+
+# ---------------- SIDEBAR ----------------
 st.sidebar.header("Match Setup")
 
-teams = sorted({c.split("_")[1] for c in x_columns if c.startswith("team1_")})
+teams = sorted({
+    c.split("_")[1]
+    for c in x_columns
+    if c.startswith("team1_")
+})
 
 batting_team = st.sidebar.selectbox("Batting Team", teams)
 bowling_team = st.sidebar.selectbox("Bowling Team", teams)
 
-st.sidebar.markdown("First Innings Details")
+st.sidebar.markdown("## First Innings Details")
 
 inn1_total = st.sidebar.slider("Total Runs", 50, 300, 160)
+
 pp_runs = st.sidebar.slider("Powerplay Runs", 0, 120, 40)
 mid_runs = st.sidebar.slider("Middle Overs Runs", 0, 150, 75)
 death_runs = st.sidebar.slider("Death Overs Runs", 0, 100, 45)
@@ -131,81 +151,160 @@ death_runs = st.sidebar.slider("Death Overs Runs", 0, 100, 45)
 pp_wk = st.sidebar.slider("Powerplay Wickets", 0, 5, 1)
 mid_wk = st.sidebar.slider("Middle Overs Wickets", 0, 5, 2)
 death_wk = st.sidebar.slider("Death Overs Wickets", 0, 5, 1)
+
 extras = st.sidebar.slider("Extras", 0, 20, 4)
 
+# ---------------- INPUT DATA ----------------
 data = pd.DataFrame([[
-    inn1_total, pp_runs, mid_runs, death_runs,
-    pp_wk, mid_wk, death_wk, extras
+    inn1_total,
+    pp_runs,
+    mid_runs,
+    death_runs,
+    pp_wk,
+    mid_wk,
+    death_wk,
+    extras
 ]], columns=[
-    "inn1_total", "pp_runs", "mid_runs", "death_runs",
-    "pp_wickets", "mid_wickets", "death_wickets", "extras"
+    "inn1_total",
+    "pp_runs",
+    "mid_runs",
+    "death_runs",
+    "pp_wickets",
+    "mid_wickets",
+    "death_wickets",
+    "extras"
 ])
 
 for col in x_columns:
+
     if col.startswith("team1_"):
         data[col] = 1 if col == f"team1_{batting_team}" else 0
+
     elif col.startswith("team2_"):
         data[col] = 1 if col == f"team2_{bowling_team}" else 0
+
     elif col not in data.columns:
         data[col] = 0
 
 data = data[x_columns]
 
-tab1, tab2, tab3 = st.tabs(["Overview", "Prediction", "Insights"])
+# ---------------- TABS ----------------
+tab1, tab2, tab3 = st.tabs([
+    "Overview",
+    "Prediction",
+    "Insights"
+])
 
+# ---------------- OVERVIEW ----------------
 with tab1:
+
     c1, c2, c3 = st.columns(3)
+
     with c1:
-        st.markdown(f"<div class='metric-box'><h3>Total Runs</h3><h1>{inn1_total}</h1></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='metric-box'><h3>Total Runs</h3><h1>{inn1_total}</h1></div>",
+            unsafe_allow_html=True
+        )
+
     with c2:
-        st.markdown(f"<div class='metric-box'><h3>Wickets Lost</h3><h1>{pp_wk + mid_wk + death_wk}</h1></div>", unsafe_allow_html=True)
+        wickets = pp_wk + mid_wk + death_wk
+
+        st.markdown(
+            f"<div class='metric-box'><h3>Wickets Lost</h3><h1>{wickets}</h1></div>",
+            unsafe_allow_html=True
+        )
+
     with c3:
-        st.markdown(f"<div class='metric-box'><h3>Run Rate</h3><h1>{inn1_total/20:.2f}</h1></div>", unsafe_allow_html=True)
+        rr = inn1_total / 20
+
+        st.markdown(
+            f"<div class='metric-box'><h3>Run Rate</h3><h1>{rr:.2f}</h1></div>",
+            unsafe_allow_html=True
+        )
 
     phase_df = pd.DataFrame({
         "Phase": ["Powerplay", "Middle", "Death"],
         "Runs": [pp_runs, mid_runs, death_runs]
     })
 
-    fig = px.bar(phase_df, x="Phase", y="Runs", text="Runs", template="plotly_dark")
+    fig = px.bar(
+        phase_df,
+        x="Phase",
+        y="Runs",
+        text="Runs",
+        template="plotly_dark"
+    )
+
     fig.update_traces(textposition="outside")
+
     st.plotly_chart(fig, use_container_width=True)
 
+# ---------------- PREDICTION ----------------
 with tab2:
+
     prob = model.predict_proba(data)[0][1]
 
     c1, c2 = st.columns([2, 1])
+
     with c1:
+
         gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=prob * 100,
-            title={"text": f"{batting_team} win probability"},
+
+            title={
+                "text": f"{batting_team} Win Probability"
+            },
+
             gauge={
                 "axis": {"range": [0, 100]},
-                "bar": {"color": "#22c55e" if prob > 0.5 else "#ef4444"},
+
+                "bar": {
+                    "color": "#22c55e" if prob > 0.5 else "#ef4444"
+                },
+
                 "steps": [
                     {"range": [0, 50], "color": "#7f1d1d"},
                     {"range": [50, 100], "color": "#14532d"}
                 ]
             }
         ))
-        gauge.update_layout(template="plotly_dark", height=420)
+
+        gauge.update_layout(
+            template="plotly_dark",
+            height=420
+        )
+
         st.plotly_chart(gauge, use_container_width=True)
 
     with c2:
+
         st.markdown("<div class='card'>", unsafe_allow_html=True)
+
         if prob > 0.65:
             st.success("Strong batting advantage")
+
         elif prob > 0.45:
             st.warning("Match evenly poised")
+
         else:
             st.error("Bowling side on top")
-        st.markdown(f"Confidence: `{prob*100:.1f}%`")
+
+        st.markdown(f"### Confidence: {prob*100:.1f}%")
+
         st.markdown("</div>", unsafe_allow_html=True)
 
+# ---------------- INSIGHTS ----------------
 with tab3:
+
     insight_df = pd.DataFrame({
-        "Factor": ["Powerplay impact", "Middle overs stability", "Death overs acceleration", "Extras conceded"],
+        "Factor": [
+            "Powerplay impact",
+            "Middle overs stability",
+            "Death overs acceleration",
+            "Extras conceded"
+        ],
+
         "Impact": [
             pp_runs - pp_wk * 10,
             mid_runs - mid_wk * 8,
@@ -214,8 +313,20 @@ with tab3:
         ]
     })
 
-    fig = px.bar(insight_df, x="Impact", y="Factor", orientation="h", template="plotly_dark")
+    fig = px.bar(
+        insight_df,
+        x="Impact",
+        y="Factor",
+        orientation="h",
+        template="plotly_dark"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
+# ---------------- FOOTER ----------------
 st.markdown("<hr>", unsafe_allow_html=True)
-st.markdown("<p class='footer'>IPL Win Predictor • Machine Learning Project</p>", unsafe_allow_html=True)
+
+st.markdown(
+    "<p class='footer'>IPL Win Predictor • Machine Learning Project</p>",
+    unsafe_allow_html=True
+)
